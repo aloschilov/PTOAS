@@ -74,7 +74,7 @@ RUN python setup.py bdist_wheel
 
 # fix missing so
 RUN export LD_LIBRARY_PATH=$LLVM_BUILD_DIR/lib:$PTO_INSTALL_DIR/lib:$LD_LIBRARY_PATH \
-    && auditwheel repair dist/ptoas*.whl
+    && auditwheel repair --plat manylinux_2_34_x86_64 dist/ptoas*.whl
 
 RUN pip install wheelhouse/ptoas*.whl
 
