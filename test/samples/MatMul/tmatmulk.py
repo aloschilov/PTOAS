@@ -191,9 +191,9 @@ def build(
                 kOff = arith.MulIOp(i, cBASEK).result
 
                 # subviews for this split-K
-                svA = pto.PartitionViewOp(tile_view_a, tvA, [c0, kOff], [cTileM, cBASEK]).result
-                svB = pto.PartitionViewOp(tile_view_b, tvB, [kOff, c0], [cBASEK, cTileN]).result
-                svBias = pto.PartitionViewOp(tile_view_bias, tvBias, [c0, c0], [cOne, cTileN]).result
+                svA = pto.PartitionViewOp(tile_view_a, tvA, offsets=[c0, kOff], sizes=[cTileM, cBASEK]).result
+                svB = pto.PartitionViewOp(tile_view_b, tvB, offsets=[kOff, c0], sizes=[cBASEK, cTileN]).result
+                svBias = pto.PartitionViewOp(tile_view_bias, tvBias, offsets=[c0, c0], sizes=[cOne, cTileN]).result
 
                 # ---- TLOAD ----
                 # 注意：TLOAD 的 valid dims 一般对应目标 tile 的有效区域（a/b/bias）
@@ -263,7 +263,7 @@ def build(
 
             # ---- TSTORE ----
             # 写回 OUT，传 C 的 valid dims
-            svOut = pto.PartitionViewOp(tile_view_out, tvOut, [c0, c0], [cTileM, cTileN]).result
+            svOut = pto.PartitionViewOp(tile_view_out, tvOut, offsets=[c0, c0], sizes=[cTileM, cTileN]).result
             pto.TStoreOp(None, cTile, svOut)
 
             func.ReturnOp([])
