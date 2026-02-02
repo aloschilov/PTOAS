@@ -74,7 +74,7 @@ jobs:
           PTOAS_BIN: ${{ github.workspace }}/build/tools/ptoas/ptoas
           PYTHON_BIN: /usr/bin/python3
           MLIR_PYTHON_ROOT: ${{ env.MLIR_PYTHONPATH }}
-          PTO_PYTHON_ROOT: ${{ env.PTO_INSTALL_DIR }}/python_packages/pto_core
+          PTO_PYTHON_ROOT: ${{ env.PTO_INSTALL_DIR }}/
           PYTHONPATH: ${{ env.MLIR_PYTHON_ROOT }}:${{ env.PTO_PYTHON_ROOT }}
         run: |
           export LD_LIBRARY_PATH="${LLVM_DIR}/lib:${PTO_INSTALL_DIR}/lib:${LD_LIBRARY_PATH}"
