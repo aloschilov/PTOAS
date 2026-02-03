@@ -4911,13 +4911,13 @@ mlir::LogicalResult mlir::pto::TSYNCOp::verify() {
 mlir::LogicalResult mlir::pto::TPrintOp::verify() {
   auto srcType = getSrc().getType();
   
-  // Support TileBufType and TileViewType
+  // Support TileBufType and PartitionTensorViewType (replaces legacy TileView).
   if (mlir::dyn_cast<mlir::pto::TileBufType>(srcType) ||
-      mlir::dyn_cast<mlir::pto::TileViewType>(srcType)) {
+      mlir::dyn_cast<mlir::pto::PartitionTensorViewType>(srcType)) {
     return mlir::success();
   }
   
-  return emitOpError() << "expects tile_buf or tile_view types for src";
+  return emitOpError() << "expects tile_buf or partition_tensor_view types for src";
 }
 
 //===----------------------------------------------------------------------===//
