@@ -619,7 +619,7 @@ struct SubviewToEmitCPattern : public OpConversionPattern<memref::SubViewOp> {
         elemTypeStr = "int64_t";
     }
 
-    // 2. 生成 Shape 模板参数（若不足 5 维，则后续补齐为 1）
+    // 2. 生成 Shape 模板参数，之后会右对齐有效维度并补齐到 5 维（高维填 1）
     SmallVector<std::string> shapeParamsVec;
     auto resShape = resTy.getShape();
     for (int i = 0; i < resTy.getRank(); ++i) {
@@ -630,62 +630,62 @@ struct SubviewToEmitCPattern : public OpConversionPattern<memref::SubViewOp> {
         }
     }
 
-    // 3. 生成 Stride 模板参数 & 收集动态 Stride 变量（若不足 5 维则推导补齐）
-    SmallVector<std::string> strideParamsVec;
+    // 3. 生成 Stride 动态值收集（保留，用于动态 stride 传参）
+    SmallVector<std::string> dummyStrideVec;
     auto subViewSteps = op.getMixedStrides();
-
     for (int i = 0; i < rank; ++i) {
         int64_t finalStride = 1;
         bool isDynamic = false;
-
-        // 检查 Source Stride
         if (i < (int)sourceStrides.size()) {
             if (auto val = extractStaticInt(sourceStrides[i])) {
                 finalStride = *val;
             } else {
                 isDynamic = true;
-                // 这是一个动态 Stride Value，收集它
                 if (auto v = sourceStrides[i].dyn_cast<Value>()) {
                     dynamicStrideValues.push_back(rewriter.getRemappedValue(v));
                 }
             }
         }
-        
-        // 叠加 SubView 的 Step (通常是静态的)
         if (i < (int)subViewSteps.size()) {
-             if (auto val = extractStaticInt(subViewSteps[i])) {
-                 finalStride *= *val;
-             }
-             // 如果 step 也是动态的 (极少见)，这里暂未处理收集逻辑，默认乘法会由模板处理
+            if (auto val = extractStaticInt(subViewSteps[i])) {
+                finalStride *= *val;
+            }
         }
-
-        strideParamsVec.push_back(isDynamic ? "-1" : std::to_string(finalStride));
+        dummyStrideVec.push_back(isDynamic ? "-1" : std::to_string(finalStride));
     }
 
-    // 3.1 若维度不足 5，补足 shape=1，并按连续存储规则推导 stride
-    auto deriveContiguous = [](StringRef prevStride, StringRef prevShape) -> std::string {
-        if (prevStride == "-1" || prevShape == "-1")
+    // 3.1 右对齐有效维度，前部补 1；再按连续规则重新推导 5 维 stride
+    // 选择“有效”维度（非 1 或 动态），右对齐到 5 维尾部
+    SmallVector<std::string, 5> finalShape(5, "1");
+    SmallVector<std::string> effectiveDims;
+    for (const auto &d : shapeParamsVec) {
+        if (d != "1")
+            effectiveDims.push_back(d);
+    }
+    int eff = std::min<int>(effectiveDims.size(), 5);
+    int shift = 5 - eff;
+    for (int i = 0; i < eff; ++i) {
+        finalShape[shift + i] = effectiveDims[effectiveDims.size() - eff + i];
+    }
+
+    SmallVector<std::string, 5> finalStride(5, "1");
+
+    auto mulOrDyn = [](const std::string &a, const std::string &b) -> std::string {
+        if (a == "-1" || b == "-1")
             return "-1";
-        int64_t s = 1, sh = 1;
-        (void)llvm::to_integer(prevStride, s);
-        (void)llvm::to_integer(prevShape, sh);
-        return std::to_string(s * sh);
+        int64_t va = 1, vb = 1;
+        (void)llvm::to_integer(a, va);
+        (void)llvm::to_integer(b, vb);
+        return std::to_string(va * vb);
     };
 
-    while (shapeParamsVec.size() < 5) {
-        // 默认补 1
-        shapeParamsVec.push_back("1");
-        // 依据上一维推导 stride；若为空则从 1 开始
-        if (strideParamsVec.empty()) {
-            strideParamsVec.push_back("1");
-        } else {
-            strideParamsVec.push_back(
-                deriveContiguous(strideParamsVec.back(), shapeParamsVec[shapeParamsVec.size() - 2]));
-        }
+    // 最低维 stride 固定为 1（或动态）
+    finalStride[4] = (finalShape[4] == "-1") ? "-1" : "1";
+    for (int i = 3; i >= 0; --i) {
+        finalStride[i] = mulOrDyn(finalStride[i + 1], finalShape[i + 1]);
     }
 
-    // 组装模板参数字符串
-    auto joinParams = [](const SmallVector<std::string> &vec) {
+    auto joinParams = [](llvm::ArrayRef<std::string> vec) {
         std::string out;
         for (size_t i = 0; i < vec.size(); ++i) {
             if (i > 0) out += ", ";
@@ -694,8 +694,8 @@ struct SubviewToEmitCPattern : public OpConversionPattern<memref::SubViewOp> {
         return out;
     };
 
-    std::string shapeParams = joinParams(shapeParamsVec);
-    std::string strideParams = joinParams(strideParamsVec);
+    std::string shapeParams = joinParams(finalShape);
+    std::string strideParams = joinParams(finalStride);
 
     // 4. 发射 typedef 语句
     rewriter.create<emitc::VerbatimOp>(loc, "using " + shapeTypeName + " = pto::Shape<" + shapeParams + ">;");
