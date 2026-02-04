@@ -322,28 +322,60 @@ jobs:
           name: ptoas-bin-aarch64
           path: ptoas-dist-out/
 
-  upload_release_assets:
-    name: Upload release assets
+  upload_release_assets_x86_64:
+    name: Upload release assets (x86_64)
     if: github.event_name == 'release'
     needs:
       - build_wheel_x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download x86_64 wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ptoas-wheel-*-x86_64
+          path: release-artifacts
+
+      - name: Download x86_64 binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ptoas-bin-x86_64
+          path: release-artifacts/ptoas-bin-x86_64
+
+      - name: Package ptoas binary
+        run: |
+          set -euo pipefail
+          tar -czf "release-artifacts/ptoas-bin-x86_64.tar.gz" -C "release-artifacts/ptoas-bin-x86_64" .
+
+      - name: Upload assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/**/*.whl
+            release-artifacts/*.tar.gz
+
+  upload_release_assets_aarch64:
+    name: Upload release assets (aarch64)
+    if: github.event_name == 'release'
+    needs:
       - build_wheel_aarch64
     runs-on: ubuntu-latest
     steps:
-      - name: Download build artifacts
+      - name: Download aarch64 wheel artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: ptoas-wheel-*-aarch64
           path: release-artifacts
 
-      - name: Package ptoas binaries
+      - name: Download aarch64 binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ptoas-bin-aarch64
+          path: release-artifacts/ptoas-bin-aarch64
+
+      - name: Package ptoas binary
         run: |
           set -euo pipefail
-          for bin_dir in release-artifacts/ptoas-bin-*; do
-            if [ -d "${bin_dir}" ]; then
-              archive_name="$(basename "${bin_dir}").tar.gz"
-              tar -czf "release-artifacts/${archive_name}" -C "${bin_dir}" .
-            fi
-          done
+          tar -czf "release-artifacts/ptoas-bin-aarch64.tar.gz" -C "release-artifacts/ptoas-bin-aarch64" .
 
       - name: Upload assets to GitHub Release
         uses: softprops/action-gh-release@v2
