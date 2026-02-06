@@ -307,12 +307,12 @@ def PTO_VFAttr : PTO_Attr<"VectorFunction", "vector_function"> {
 
 def PTO_CmpModeEnum : PTO_I32Enum<
   "CmpMode", "PTO compare mode", [
-    I32EnumAttrCase<"EQ", 0, "equal">,
-    I32EnumAttrCase<"NE", 1, "not_equal">,
-    I32EnumAttrCase<"LT", 2, "less_than">,
-    I32EnumAttrCase<"LE", 3, "less_equal">,
-    I32EnumAttrCase<"GT", 4, "greater_than">,
-    I32EnumAttrCase<"GE", 5, "greater_equal">
+    I32EnumAttrCase<"EQ", 0, "eq">,
+    I32EnumAttrCase<"NE", 1, "ne">,
+    I32EnumAttrCase<"LT", 2, "lt">,
+    I32EnumAttrCase<"LE", 3, "le">,
+    I32EnumAttrCase<"GT", 4, "gt">,
+    I32EnumAttrCase<"GE", 5, "ge">
   ]>;
 
 def PTO_CmpModeAttr : EnumAttr<PTO_Dialect, PTO_CmpModeEnum, "cmp"> {
