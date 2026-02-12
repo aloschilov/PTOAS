@@ -11,6 +11,7 @@ def PtrType : TypeDef<PTO_Dialect, "Ptr"> {
   );
   let assemblyFormat = "`<` $elementType `>`";
 
+  let skipDefaultBuilders = 1;
   let builders = [
     TypeBuilder<(ins "Type":$elementType), [{
       return Base::get($_ctxt, elementType);
