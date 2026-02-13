@@ -2193,7 +2193,25 @@ struct SubviewToEmitCPattern : public OpConversionPattern<memref::SubViewOp> {
 
 
     // -------------------------------------------------------------------------
-    // Part 2: 生成 GlobalTensor 类型 (Shape/Stride Template Generation)
+    // Part 2: For non-GM memrefs, keep pointer (no GlobalTensor).
+    // -------------------------------------------------------------------------
+    bool isGlobal = true;
+    if (auto asAttr = dyn_cast_or_null<pto::AddressSpaceAttr>(srcType.getMemorySpace())) {
+      auto as = asAttr.getAddressSpace();
+      isGlobal = (as == pto::AddressSpace::GM || as == pto::AddressSpace::Zero);
+    }
+    if (!isGlobal) {
+      Type dstTy = getTypeConverter()->convertType(op.getType());
+      if (!dstTy)
+        return failure();
+      if (newPtr.getType() != dstTy)
+        newPtr = rewriter.create<emitc::CastOp>(loc, dstTy, newPtr);
+      rewriter.replaceOp(op, newPtr);
+      return success();
+    }
+
+    // -------------------------------------------------------------------------
+    // Part 3: 生成 GlobalTensor 类型 (Shape/Stride Template Generation)
     // -------------------------------------------------------------------------
     
     // When emitting C++ with `declareVariablesAtTop`, value declarations are
@@ -2855,11 +2873,24 @@ struct PointerCastConversion : public OpConversionPattern<pto::PointerCastOp> {
         resultValue = varOp.getResult();
     }
 
-    // TASSIGN
+    // TASSIGN: pto-isa expects an integral address.
+    Value addr = adaptor.getAddrs()[0];
+    if (isa<emitc::PointerType>(addr.getType()) ||
+        (isa<emitc::OpaqueType>(addr.getType()) &&
+         cast<emitc::OpaqueType>(addr.getType()).getValue().ends_with("*"))) {
+      auto u64Ty = emitc::OpaqueType::get(ctx, "uint64_t");
+      auto rcU64 = rewriter.getArrayAttr({emitc::OpaqueAttr::get(ctx, "uint64_t")});
+      addr = rewriter.create<emitc::CallOpaqueOp>(
+                 loc, u64Ty, "reinterpret_cast",
+                 /*args=*/ArrayAttr{}, /*templateArgs=*/rcU64,
+                 /*operands=*/ValueRange{addr})
+                 .getResult(0);
+    }
+
     rewriter.create<emitc::CallOpaqueOp>(
         loc, TypeRange{}, "TASSIGN",
         ArrayAttr{}, ArrayAttr{},
-        ValueRange{resultValue, adaptor.getAddrs()[0]});
+        ValueRange{resultValue, addr});
 
     rewriter.replaceOp(op, resultValue);
     return success();
