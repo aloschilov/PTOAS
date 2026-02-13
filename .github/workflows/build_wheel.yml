@@ -62,14 +62,12 @@ jobs:
           echo "PTO_SOURCE_DIR=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "PTO_INSTALL_DIR=$GITHUB_WORKSPACE/install" >> $GITHUB_ENV
 
-      - name: Cache LLVM build
+      - name: Restore LLVM build cache (exact key)
         id: cache-llvm
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: /llvm-workspace/llvm-project/build-shared
           key: llvm-${{ env.LLVM_TAG }}-manylinux_2_34-${{ matrix.arch }}-${{ matrix.python }}-v1
-          restore-keys: |
-            llvm-${{ env.LLVM_TAG }}-manylinux_2_34-${{ matrix.arch }}-${{ matrix.python }}-
 
       - name: Prepare LLVM source
         run: |
