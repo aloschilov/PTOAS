@@ -31,6 +31,7 @@
 #include "mlir/IR/AffineMap.h"
 #include "mlir/Dialect/Utils/StaticValueUtils.h"
 
+#include <algorithm>
 #include <numeric>
 #include <optional>
 
@@ -6643,11 +6644,43 @@ LogicalResult SubsetOp::inferReturnTypes(
   if (!sizeAttr) return failure();
 
   SmallVector<int64_t> resultShape;
-  SmallVector<int64_t> validShape;
   for (auto attr : sizeAttr) {
     int64_t dim = llvm::cast<IntegerAttr>(attr).getInt();
     resultShape.push_back(dim);
-    validShape.push_back(dim);
+  }
+
+  // Derive valid shape from parent valid dims when possible.
+  SmallVector<int64_t> validShape;
+  ArrayRef<int64_t> parentValid = sourceType.getValidShape();
+  for (size_t i = 0, e = resultShape.size(); i < e; ++i) {
+    int64_t sizeDim = resultShape[i];
+    int64_t vdim = sizeDim;
+
+    if (parentValid.size() == resultShape.size()) {
+      int64_t pv = parentValid[i];
+      if (pv == ShapedType::kDynamic) {
+        vdim = ShapedType::kDynamic;
+      } else {
+        int64_t off = 0;
+        // operands: [source, offsets...]
+        if (operands.size() > 1 + i) {
+          auto offOpt = getConstIndexValue(operands[1 + i]);
+          if (!offOpt) {
+            vdim = ShapedType::kDynamic;
+            validShape.push_back(vdim);
+            continue;
+          }
+          off = *offOpt;
+          int64_t diff = pv - off;
+          if (diff < 0) diff = 0;
+          vdim = std::min<int64_t>(sizeDim, diff);
+        } else {
+          vdim = ShapedType::kDynamic;
+        }
+      }
+    }
+
+    validShape.push_back(vdim);
   }
 
   // 3. 继承 Config (若为空使用默认)

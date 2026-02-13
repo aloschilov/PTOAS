@@ -25,6 +25,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "Utils.h" // 假设包含一些通用的工具函数
 
+#include <algorithm>
+
 using namespace mlir;
 
 namespace mlir {
@@ -58,6 +60,31 @@ static mlir::pto::TileBufConfigAttr lookupConfig(Value v) {
   
   // 如果追溯到 BlockArgument (函数参数) 或其他无法穿透的 Op，则返回空
   return {}; 
+}
+
+// =============================================================================
+// Helper: Valid dims backtracking (v_row / v_col)
+// =============================================================================
+static void lookupValidDims(Value v, Value &vRow, Value &vCol) {
+  if (auto bind = v.getDefiningOp<mlir::pto::BindTileOp>()) {
+    vRow = bind.getValidRow();
+    vCol = bind.getValidCol();
+    return;
+  }
+  if (auto subview = v.getDefiningOp<memref::SubViewOp>()) {
+    lookupValidDims(subview.getSource(), vRow, vCol);
+    return;
+  }
+  if (auto cast = v.getDefiningOp<memref::ReinterpretCastOp>()) {
+    lookupValidDims(cast.getSource(), vRow, vCol);
+    return;
+  }
+  if (auto cast = v.getDefiningOp<memref::CastOp>()) {
+    lookupValidDims(cast.getSource(), vRow, vCol);
+    return;
+  }
+  vRow = Value();
+  vCol = Value();
 }
 
 // =============================================================================
@@ -256,6 +283,34 @@ static Value ensureIndex(IRRewriter &rewriter, Location loc, Value v,
   if (anchorOp)
     anchorOp->emitError() << "expected index or integer, but got " << v.getType();
   return Value();
+}
+
+static Value computeSubsetValidDim(IRRewriter &rewriter, Location loc,
+                                   Value parentValid, Value offset,
+                                   int64_t size, Operation *anchorOp) {
+  Value sizeVal = rewriter.create<arith::ConstantIndexOp>(loc, size);
+  if (!parentValid)
+    return sizeVal;
+
+  int64_t pvConst = 0, offConst = 0;
+  if (getConstIndexValue(parentValid, pvConst) &&
+      getConstIndexValue(offset, offConst)) {
+    int64_t diff = pvConst - offConst;
+    if (diff < 0) diff = 0;
+    int64_t clipped = std::min<int64_t>(size, diff);
+    return rewriter.create<arith::ConstantIndexOp>(loc, clipped);
+  }
+
+  Value pv = ensureIndex(rewriter, loc, parentValid, anchorOp);
+  Value off = ensureIndex(rewriter, loc, offset, anchorOp);
+  Value diff = rewriter.create<arith::SubIOp>(loc, pv, off);
+  Value zero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+  Value gt =
+      rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt, diff, zero);
+  Value nonNeg = rewriter.create<arith::SelectOp>(loc, gt, diff, zero);
+  Value lt = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt,
+                                            nonNeg, sizeVal);
+  return rewriter.create<arith::SelectOp>(loc, lt, nonNeg, sizeVal);
 }
 
 static void dumpPretty(Operation *op, llvm::raw_ostream &os) {
@@ -829,12 +884,18 @@ struct PTOViewToMemrefPass
             loc, resultMemRefType, src, mixedOffsets, mixedSizes, mixedStrides);
 
         // 6. Re-bind tile metadata (config + valid dims)
+        Value parentVRow;
+        Value parentVCol;
+        lookupValidDims(src, parentVRow, parentVCol);
+
         Value vRow;
         Value vCol;
         if (!staticSizes.empty())
-          vRow = rewriter.create<arith::ConstantIndexOp>(loc, staticSizes[0]);
+          vRow = computeSubsetValidDim(rewriter, loc, parentVRow,
+                                       op.getOffsets()[0], staticSizes[0], op);
         if (staticSizes.size() > 1)
-          vCol = rewriter.create<arith::ConstantIndexOp>(loc, staticSizes[1]);
+          vCol = computeSubsetValidDim(rewriter, loc, parentVCol,
+                                       op.getOffsets()[1], staticSizes[1], op);
 
         auto bindOp = rewriter.create<pto::BindTileOp>(
             loc, resultMemRefType, sv.getResult(),
