@@ -44,10 +44,9 @@ RUN cmake -G Ninja -S llvm -B $LLVM_BUILD_DIR \
 
 RUN ninja -C $LLVM_BUILD_DIR
 
-# build ptoas
+# build ptoas (use local source when build context is repo root: docker build -f docker/Dockerfile .)
 WORKDIR $WORKSPACE_DIR
-RUN git clone https://github.com/zhangstevenunity/PTOAS.git
-# TODO: tag git commit of PTOAS repo
+COPY . PTOAS
 
 WORKDIR $PTO_SOURCE_DIR
 RUN cmake -G Ninja \
@@ -70,7 +69,7 @@ ENV PY_PACKAGE_DIR=$LLVM_BUILD_DIR/tools/mlir/python_packages/mlir_core/
 # copy pto.py, _pto_ops_gen.py 
 RUN cp $PTO_INSTALL_DIR/mlir/dialects/*.py $PY_PACKAGE_DIR/mlir/dialects/
 
-COPY ./setup.py $PY_PACKAGE_DIR/
+COPY docker/setup.py $PY_PACKAGE_DIR/
 
 WORKDIR $PY_PACKAGE_DIR
 RUN python setup.py bdist_wheel
@@ -101,7 +100,7 @@ RUN ptoas --enable-insert-sync ./abs.pto -o ./abs.cpp
 # collect only *.so actually needed by ptoas (transitive closure under build dirs)
 # it is smaller (<200 MB) than copying the full $LLVM_BUILD_DIR/lib (>700 MB)
 ENV PTOAS_DEPS_DIR=/ptoas-deps
-COPY copy_ptoas_deps.sh /tmp/copy_ptoas_deps.sh
+COPY docker/copy_ptoas_deps.sh /tmp/copy_ptoas_deps.sh
 RUN mkdir -p $PTOAS_DEPS_DIR && bash /tmp/copy_ptoas_deps.sh
 
 # -----------------------------------------------------------------------------

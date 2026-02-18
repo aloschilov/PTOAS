@@ -1685,7 +1685,7 @@ LogicalResult pto::ColSumOp_DPS::verify() {
 // PTO_TCvtOp_DPS verification
 //===----------------------------------------------------------------------===//
 
-llvm::LogicalResult mlir::pto::CvtOp_DPS::verify() {
+mlir::LogicalResult mlir::pto::CvtOp_DPS::verify() {
   auto srcTy = llvm::dyn_cast<mlir::MemRefType>(getSrc().getType());
   auto dstTy = llvm::dyn_cast<mlir::MemRefType>(getDst().getType());
   if (!srcTy || !dstTy) return emitOpError("expects memref src/dst");
@@ -1959,7 +1959,7 @@ mlir::LogicalResult mlir::pto::FillPadOp_DPS::verify() {
 //===----------------------------------------------------------------------===//
 
 // TGather: must provide exactly one of {indices operand, maskPattern attr}.
-llvm::LogicalResult mlir::pto::GatherOp_DPS::verify() {
+mlir::LogicalResult mlir::pto::GatherOp_DPS::verify() {
   Value indices = getIndices();                 // optional operand (may be null)
   auto maskAttr = getMaskPatternAttr();         // optional attr (may be null)
 
@@ -3977,7 +3977,7 @@ LogicalResult pto::TColSumOp::verify() {
 // PTO_TCvtOp_DPS verification
 //===----------------------------------------------------------------------===//
 
-llvm::LogicalResult mlir::pto::TCvtOp::verify() {
+mlir::LogicalResult mlir::pto::TCvtOp::verify() {
   auto srcTy = llvm::dyn_cast<mlir::pto::TileBufType>(getSrc().getType());
   auto dstTy = llvm::dyn_cast<mlir::pto::TileBufType>(getDst().getType());
   if (!srcTy || !dstTy) return emitOpError("expects tilebuf src/dst");
@@ -4200,7 +4200,7 @@ mlir::LogicalResult mlir::pto::TFillPadOp::verify() {
 //===----------------------------------------------------------------------===//
 
 // TGather: must provide exactly one of {indices operand, maskPattern attr}.
-llvm::LogicalResult mlir::pto::TGatherOp::verify() {
+mlir::LogicalResult mlir::pto::TGatherOp::verify() {
   Value indices = getIndices();                 // optional operand (may be null)
   auto maskAttr = getMaskPatternAttr();         // optional attr (may be null)
 
@@ -7030,7 +7030,7 @@ static void addEffect(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>> &effects,
     OpOperand *operand, MemoryEffects::Effect *effect) {
   if (operand)
-    effects.emplace_back(effect, operand, SideEffects::DefaultResource::get());
+    effects.emplace_back(effect, SideEffects::DefaultResource::get());
 }
  
 // 针对结果 (Result) 的重载
