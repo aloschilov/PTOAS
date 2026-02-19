@@ -1,12 +1,21 @@
+The Docker build is **split so LLVM is never rebuilt** when you change PTOAS:
+
+1. **LLVM image** (build once, or when you change LLVM version): uses an **empty context** so no clone/build depends on the repo. Rebuilding this image is the only way to change LLVM.
+2. **PTOAS image**: `FROM ptoas-llvm:19` then `COPY . PTOAS` and build PTOAS. Any repo change only affects from the COPY step onward.
+
 Build:
 
 ```bash
-docker build . -t ptoas:py3.11
-# default to py3.11 to be compatible with readily-availble CANN images at
-# https://quay.io/repository/ascend/cann?tab=tags & https://github.com/Ascend/cann-container-image/tree/main/cann
+# 1) Build LLVM image once (empty context = no repo dependency; matches Triton v3.1.0 / LLVM 19.0.0)
+docker build -f docker/Dockerfile.llvm -t ptoas-llvm:19 docker/empty
 
-# optional, to change python version
-docker build . -t ptoas:py3.12 --build-arg PY_VER=cp312-cp312
+# 2) From repo root, build PTOAS image (uses local source)
+docker build -f docker/Dockerfile . -t ptoas:py3.11
+# py3.11 to match CANN images: https://quay.io/repository/ascend/cann?tab=tags
+
+# Optional: different Python/LLVM when building the LLVM image
+docker build -f docker/Dockerfile.llvm -t ptoas-llvm:19 docker/empty --build-arg PY_VER=cp312-cp312
+docker build -f docker/Dockerfile.llvm -t ptoas-llvm:19 docker/empty --build-arg LLVM_REF=<commit-or-tag>
 ```
 
 To test compiler:

@@ -13,8 +13,9 @@
 #include "mlir/IR/Value.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/Support/LLVM.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseMapInfo.h"
+#include "llvm/ADT/SmallVector.h"
  
 // 引入 PTO Dialect 定义 (获取 AddressSpace 等)
 #include "PTO/IR/PTO.h"
@@ -304,7 +305,7 @@ enum class UNIT_FLAG {
   ENABLED_ONLY_LAST_ITER,
   ENABLED_ONLY_FIRST_AND_LAST_ITERS
 };
- 
+
 // 核心节点：代表一个计算或搬运指令
 class CompoundInstanceElement : public InstanceElement {
 public:

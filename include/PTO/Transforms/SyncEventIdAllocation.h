@@ -2,6 +2,7 @@
 #define MLIR_DIALECT_PTO_TRANSFORMS_INJECTSYNC_SYNCEVENTIDALLOCATION_H
  
 #include "PTO/Transforms/SyncCommon.h"
+#include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallSet.h"
 #include <cstdint>
@@ -71,7 +72,7 @@ private:
   void clearAllocatedEventId();
   SmallVector<bool> GetEventIdIdleStatus(SyncOperation *sync,
                                          size_t eventIdNum);
-  llvm::LogicalResult ChangeNoEventIdSyncToPipeAll();
+  mlir::LogicalResult ChangeNoEventIdSyncToPipeAll();
   void MoveOutBackwardMatchSync(const SyncOperation *reallocatedSync);
   bool TryWidenByOtherSync(const SyncOperation *sync);
   bool tryWidenOnFirstFound();

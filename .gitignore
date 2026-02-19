@@ -73,3 +73,11 @@ test/samples/**/npu_validation/
 .DS_Store
 .ipynb_checkpoints/
 *.orig
+
+# Patch / reject files
+*.rej
+*.patch
+
+# E2E-generated sample outputs (e.g. from run_sim_example.sh)
+test/samples/Abs/abs.pto
+test/samples/Abs/abs.cpp

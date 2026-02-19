@@ -47,6 +47,20 @@ INCLUDE_REPLACEMENT = (
     "};\n"
     "} // namespace pto\n"
     "#endif\n"
+    "\n"
+    "// pto-isa npu/a5/TCvt.hpp uses __cce_simd::RoundRType etc.; CANN 8.5.0-910b\n"
+    "// (and some toolchains) expose these in the global namespace only. Re-export\n"
+    "// so kernel compile resolves.\n"
+    "#if defined(__CCE_AICORE__)\n"
+    "namespace __cce_simd {\n"
+    "using ::RoundRType;\n"
+    "using ::RoundAType;\n"
+    "using ::RoundFType;\n"
+    "using ::RoundCType;\n"
+    "using ::RoundZType;\n"
+    "using ::RoundOType;\n"
+    "}\n"
+    "#endif\n"
     "#include <pto/pto-inst.hpp>\n"
     "#include <pto/common/constants.hpp>\n"
     "#ifndef __CPU_SIM\n"
@@ -201,6 +215,13 @@ def _parse_kernel_params(text: str):
     if last:
         params.append(last)
     return params
+
+
+def _stub_param_decl(raw_param: str) -> str:
+    """Host-side parameter declaration for the sim stub (no __gm__)."""
+    if _is_gm_pointer_param(raw_param):
+        return _extract_cpp_type(raw_param) + "* " + _extract_cpp_name(raw_param)
+    return raw_param.strip()
 
 
 def _parse_kernel_name(text: str) -> str:
@@ -1097,6 +1118,20 @@ def generate_testcase(
     )
     (output_dir / "launch.cpp").write_text(launch_cpp, encoding="utf-8")
 
+    # Host-only stub that defines the kernel symbol so the simulator (camodel) can
+    # resolve it when loading the .so. The real kernel is in the device part of the
+    # fat object and not in the dynamic symbol table; this stub satisfies the lookup.
+    stub_params = ", ".join(_stub_param_decl(p) for p in raw_params)
+    stub_voids = " ".join(f"(void){_extract_cpp_name(p)};" for p in raw_params)
+    kernel_sim_stub_cpp = f"""// Generated host stub for simulator symbol resolution.
+void {kernel_name}({stub_params}) {{
+  {stub_voids}
+}}
+"""
+    (output_dir / f"{testcase}_kernel_sim_stub.cpp").write_text(
+        kernel_sim_stub_cpp, encoding="utf-8"
+    )
+
     mem_base_define = "MEMORY_BASE"
     if "910b" in (soc_version or "").lower():
         mem_base_define = "REGISTER_BASE"
@@ -1189,7 +1224,20 @@ include_directories(
     ${{ASCEND_DRIVER_PATH}}/kernel/inc
 )
 
+	# Stub object: compiled with host options so the kernel symbol is in the dynamic
+	# symbol table for the simulator (camodel). Only linked when ENABLE_SIM_GOLDEN.
+	add_library({testcase}_kernel_sim_stub OBJECT {testcase}_kernel_sim_stub.cpp)
+	set_target_properties({testcase}_kernel_sim_stub PROPERTIES POSITION_INDEPENDENT_CODE ON)
+	target_compile_options({testcase}_kernel_sim_stub PRIVATE ${{CMAKE_CPP_COMPILE_OPTIONS}})
+	target_include_directories({testcase}_kernel_sim_stub PRIVATE
+	    ${{PTO_ISA_ROOT}}/include
+	    ${{PTO_ISA_ROOT}}/tests/common
+	)
+
 	add_library({testcase}_kernel SHARED {testcase}_kernel.cpp launch.cpp)
+	if(ENABLE_SIM_GOLDEN)
+	    target_link_libraries({testcase}_kernel PRIVATE {testcase}_kernel_sim_stub)
+	endif()
 	target_compile_options({testcase}_kernel PRIVATE ${{CMAKE_CCE_COMPILE_OPTIONS}} --cce-aicore-arch={aicore_arch}{dav_defines} -D{mem_base_define} -std=c++17)
 	target_include_directories({testcase}_kernel PRIVATE
 	    ${{ASCEND_HOME_PATH}}/pkg_inc/
@@ -1209,6 +1257,10 @@ target_link_directories({testcase} PUBLIC
     ${{ASCEND_HOME_PATH}}/lib64
 )
 
+# Kernel .so is built with --cce-fatobj-link; the kernel entry is in the device part
+# of the fat object, so the host linker does not see it. Allow undefined refs from
+# the kernel .so so the executable can link; the runtime resolves the kernel at load.
+target_link_options({testcase} PRIVATE "SHELL:-Wl,--allow-shlib-undefined")
 target_link_libraries({testcase} PRIVATE
     {testcase}_kernel
     runtime
@@ -1229,6 +1281,7 @@ if(ENABLE_SIM_GOLDEN)
         ${{ASCEND_HOME_PATH}}/simulator/${{SOC_VERSION}}/lib
         ${{ASCEND_HOME_PATH}}/tools/simulator/${{SOC_VERSION}}/lib
     )
+    target_link_options({testcase}_sim PRIVATE "SHELL:-Wl,--allow-shlib-undefined")
     target_link_libraries({testcase}_sim PRIVATE
         {testcase}_kernel
         runtime_camodel

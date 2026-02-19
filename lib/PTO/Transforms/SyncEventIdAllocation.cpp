@@ -1,8 +1,28 @@
 #include "PTO/Transforms/SyncEventIdAllocation.h"
 #include "PTO/Transforms/SyncCommon.h"
- 
+#include "llvm/ADT/DenseMapInfo.h"
+
+namespace llvm {
+template <>
+struct DenseMapInfo<mlir::pto::PipelineType> {
+  static inline mlir::pto::PipelineType getEmptyKey() {
+    return static_cast<mlir::pto::PipelineType>(static_cast<uint32_t>(-1));
+  }
+  static inline mlir::pto::PipelineType getTombstoneKey() {
+    return static_cast<mlir::pto::PipelineType>(static_cast<uint32_t>(-2));
+  }
+  static unsigned getHashValue(const mlir::pto::PipelineType &Val) {
+    return static_cast<unsigned>(static_cast<uint32_t>(Val));
+  }
+  static bool isEqual(const mlir::pto::PipelineType &LHS,
+                      const mlir::pto::PipelineType &RHS) {
+    return LHS == RHS;
+  }
+};
+} // namespace llvm
+
 #define DEBUG_TYPE "pto-inject-sync"
- 
+
 using namespace mlir;
 using namespace mlir::pto;
 
@@ -534,7 +554,7 @@ void SyncEventIdAllocation::ClearReallocatedBackwardMatchSync() {
   syncIR_[syncIR_.size() - 1]->pipeAfter = newPipeAfter;
 }
  
-llvm::LogicalResult SyncEventIdAllocation::ChangeNoEventIdSyncToPipeAll() {
+mlir::LogicalResult SyncEventIdAllocation::ChangeNoEventIdSyncToPipeAll() {
   for (auto &e : syncIR_) {
     for (auto &sync : e->pipeAfter) {
       if (sync->GetType() == SyncOperation::TYPE::WAIT_EVENT &&

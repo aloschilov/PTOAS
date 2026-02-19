@@ -2,47 +2,12 @@ ARG ARCH=x86_64
 # ARCH options: x86_64, aarch64
 
 # -----------------------------------------------------------------------------
-# Stage 1: build wheel and ptoas in manylinux image
+# Stage 1: build wheel and ptoas (LLVM is pre-built in ptoas-llvm image)
 # -----------------------------------------------------------------------------
-FROM quay.io/pypa/manylinux_2_34_${ARCH} AS builder
-ARG ARCH
-# need to re-declare ARG after FROM
-
-# NOTE: change $PY_VER for different Python versions (3.8 - 3.14 available)
-ARG PY_VER=cp311-cp311
-ARG LLVM_TAG=llvmorg-19.1.7
-
-## -- usually no need to change below --
-
-ENV PY_PATH="/opt/python/${PY_VER}"
-ENV PATH="${PY_PATH}/bin:${PATH}"
-
-# dependency
-RUN dnf install -y ninja-build cmake git ccache gcc-c++ lld zip && dnf clean all
-RUN pip install --no-cache-dir numpy pybind11 nanobind setuptools wheel auditwheel
-
-# setting build directories
-ENV WORKSPACE_DIR=/llvm-workspace
-ENV LLVM_SOURCE_DIR=$WORKSPACE_DIR/llvm-project
-ENV LLVM_BUILD_DIR=$LLVM_SOURCE_DIR/build-shared
-
-ENV PTO_SOURCE_DIR=$WORKSPACE_DIR/PTOAS
-ENV PTO_INSTALL_DIR=$PTO_SOURCE_DIR/install
-
-# build LLVM
-WORKDIR $WORKSPACE_DIR
-RUN git clone --depth 1 --branch ${LLVM_TAG} https://github.com/llvm/llvm-project.git
-
-WORKDIR $LLVM_SOURCE_DIR
-RUN cmake -G Ninja -S llvm -B $LLVM_BUILD_DIR \
-    -DLLVM_ENABLE_PROJECTS="mlir;clang" \
-    -DBUILD_SHARED_LIBS=ON \
-    -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-    -DPython3_EXECUTABLE=${PY_PATH}/bin/python \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DLLVM_TARGETS_TO_BUILD="host"
-
-RUN ninja -C $LLVM_BUILD_DIR
+# Build LLVM image once with empty context so it never rebuilds from repo changes:
+#   docker build -f docker/Dockerfile.llvm -t ptoas-llvm:19 docker/empty
+FROM ptoas-llvm:19 AS builder
+ARG ARCH=x86_64
 
 # build ptoas (use local source when build context is repo root: docker build -f docker/Dockerfile .)
 WORKDIR $WORKSPACE_DIR

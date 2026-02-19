@@ -3,7 +3,8 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
 #include "llvm/ADT/DenseMap.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h" 
+#include "llvm/ADT/DenseMapInfo.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 
 using namespace mlir;
 using namespace mlir::pto;
@@ -11,10 +12,32 @@ using namespace mlir::pto;
 namespace {
 
 enum class ComputeDomain {
-  VECTOR, 
-  CUBE,   
-  OTHER   
+  VECTOR,
+  CUBE,
+  OTHER,
 };
+
+} // namespace
+
+namespace llvm {
+template <>
+struct DenseMapInfo<ComputeDomain> {
+  static inline ComputeDomain getEmptyKey() {
+    return static_cast<ComputeDomain>(static_cast<size_t>(-1));
+  }
+  static inline ComputeDomain getTombstoneKey() {
+    return static_cast<ComputeDomain>(static_cast<size_t>(-2));
+  }
+  static unsigned getHashValue(const ComputeDomain &Val) {
+    return static_cast<unsigned>(static_cast<size_t>(Val));
+  }
+  static bool isEqual(const ComputeDomain &LHS, const ComputeDomain &RHS) {
+    return LHS == RHS;
+  }
+};
+} // namespace llvm
+
+namespace {
 
 class PTOInsertCVMovPass : public PassWrapper<PTOInsertCVMovPass, OperationPass<func::FuncOp>> {
 public:

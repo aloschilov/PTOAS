@@ -4,14 +4,34 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Value.h"
 #include "mlir/Support/LLVM.h"
+#include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <memory>
 #include <utility>
 #include <map>
- 
+
+namespace llvm {
+template <>
+struct DenseMapInfo<mlir::pto::UNIT_FLAG> {
+  static inline mlir::pto::UNIT_FLAG getEmptyKey() {
+    return static_cast<mlir::pto::UNIT_FLAG>(static_cast<size_t>(-1));
+  }
+  static inline mlir::pto::UNIT_FLAG getTombstoneKey() {
+    return static_cast<mlir::pto::UNIT_FLAG>(static_cast<size_t>(-2));
+  }
+  static unsigned getHashValue(const mlir::pto::UNIT_FLAG &Val) {
+    return static_cast<unsigned>(static_cast<size_t>(Val));
+  }
+  static bool isEqual(const mlir::pto::UNIT_FLAG &LHS,
+                     const mlir::pto::UNIT_FLAG &RHS) {
+    return LHS == RHS;
+  }
+};
+} // namespace llvm
+
 #define DEBUG_TYPE "pto-inject-sync"
- 
+
 using namespace mlir;
 using namespace mlir::pto;
  
